@@ -1,8 +1,11 @@
-
+import imp
+import sys
 import myo
 import math
 import time
 import numpy
+from myo.lowlevel import pose_t, stream_emg
+sys.path.append('../')
 myo.init()
 
 from myo.six import print_
@@ -72,12 +75,15 @@ class Listener(myo.DeviceListener):
         self.fistcount=0
         self.Odata = []
         self.Adata = []
+        self.Edata = []
 
 
     def on_connect(self, myo, timestamp):
         print_("Connected to Myo")
         myo.vibrate('short')
         myo.request_rssi()
+        myo.set_stream_emg(stream_emg.enabled)
+        print_("Enabling EMG")
 
     def on_rssi(self, myo, timestamp, rssi):
         print_("RSSI:", rssi)
@@ -99,6 +105,11 @@ class Listener(myo.DeviceListener):
     def on_pose(self, myo, timestamp, pose):
         self.nowpose=pose
         print_('on_pose', pose)
+##        if pose == pose_t.double_tap:
+##            print_("Enabling EMG")
+##            myo.set_stream_emg(stream_emg.enabled)
+##        elif pose == pose_t.fingers_spread:
+##            myo.set_stream_emg(stream_emg.disabled)
         if pose == "fist":
             self.fistcount=self.fistcount+1
             if self.fistcount==1:
@@ -124,6 +135,7 @@ class Listener(myo.DeviceListener):
                 self.ysfull[self.counter2] = math.sin(math.radians(yaw1))
                 
                 if self.state!=1:
+                    print ("orientation")
                     print_(roll1,pitch1,yaw1)
                     if (self.state == 2):
                         rollc = math.cos(math.radians(roll1))
@@ -144,7 +156,7 @@ class Listener(myo.DeviceListener):
                         pitchf = math.degrees(math.atan2(pitchs-pitchbs,pitchc-pitchbc))
                         yawf = math.degrees(math.atan2(yaws-yawbs,yawc-yawbc))
 
-                        self.Odata.append([rollf,pitchf, yawf])
+                        self.Odata.append([rollf, pitchf, yawf])
                                         
 
 
@@ -161,13 +173,13 @@ class Listener(myo.DeviceListener):
             ps = numpy.mean(self.psfull)
             ys = numpy.mean(self.ysfull)
 
-            if self.state==0:  # calibration
-
+            if self.state==0:  # calibration-
+                print ("Calibration")
                 self.rollb = math.degrees(math.atan2(rs,rc))
                 self.pitchb = math.degrees(math.atan2(ps,pc))
                 self.yawb = math.degrees(math.atan2(ys,yc))
                 baseline=[self.rollb,self.pitchb,self.yawb]
-                print(baseline)
+                print("baseline", baseline)
                 print("Calibration Complete! You have 2 seconds to change your gesture and then record a new one for 2")
                 self.counter2=0
                 self.state=1
@@ -176,7 +188,7 @@ class Listener(myo.DeviceListener):
 
             elif self.state == 1:
 
-                for i in range(1,1000):
+                for i in range(1,2000):
                     for j in range(1,10000):
                         a=i
                 self.counter2=0
@@ -187,16 +199,51 @@ class Listener(myo.DeviceListener):
 
                 
                 pose_number=assign_pose_number(self.nowpose)
-                new_number=1#input("Please enter the gesture number for the last gesture: ")
+                new_number=5#input("Please enter the gesture number for the last gesture: ")
+                print ("Accel", self.Adata, len(self.Adata))
+                print ("Orient", self.Odata, len(self.Odata))
+                print ("EMG", self.Edata, len(self.Edata))
+                if (len(self.Edata) == 400):
+                    fo = open("trainingdata200.csv","ab")
+                    iOA = 0
+                    run = 0
+                                           
+
+##                    for point in self.Odata:
+##                        fo.write('%s, %f,%f, %f, %f\n' % (point[0], point[1], point[2], point[3], new_number))
+##
+##                    for point in self.Adata:
+##                        fo.write("%s, %f, %f, %f, %f\n" %(point[0], point[1][0], point[1][1], point[1][2], new_number))
                 
-                fo = open("trainingdata.csv","ab")
-                for point in self.Odata:
-                    fo.write('%f,%f, %f, %f\n' % (point[0], point[1], point[2],new_number))
-                fo.close()
-                print("Saved!")
+                    for point in self.Edata:
+                        fo.write('%f,%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n' % (self.Odata[iOA][0], self.Odata[iOA][1], self.Odata[iOA][2], self.Adata[iOA][0], self.Adata[iOA][1],
+                                                                                                        self.Adata[iOA][2], point[0], point[1], point[2], point[3], point[4],point[5], point[6],point[7], new_number))
+##                        fo.write("%s, %f, %f, %f, %f\n" %(self.Adata[iOA][0], self.Adata[iOA][1], self.Adata[iOA][2], new_number))
+##                        fo.write("%s, %f, %f, %f, %f, %f, %f, %f, %f, %f\n" %(point[0], point[1], point[2], point[3], point[4],point[5], point[6],point[7], new_number))
+                        run+=1
+                        if (run == 4):
+                            run=0
+                            iOA+=1
+                    
+                    fo.close()
+
+                    f50 = open("trainingdata50.csv","ab")
+                    EI = 3
+                    for i in xrange(100):
+                        f50.write('%f,%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n' % (self.Odata[i][0], self.Odata[i][1], self.Odata[i][2], self.Adata[i][0], self.Adata[i][1],
+                                                                                                  self.Adata[i][2], self.Edata[EI][0], self.Edata[EI][1], self.Edata[EI][2], self.Edata[EI][3],
+                                                                                                  self.Edata[EI][4],self.Edata[EI][5], self.Edata[EI][6],self.Edata[EI][7], new_number))
+                        EI+=4
+                    f50.close()
+                    print("Saved!")
+                else:
+                    print ("Not Saved.")
                 self.counter2=0
                 cont = raw_input("Press c to record another")
                 if (cont == "c"):
+                    self.Odata = []
+                    self.Adata = []
+                    self.Edata = []
                     self.state = 2
                 else:
                     self.state=-1
@@ -206,14 +253,41 @@ class Listener(myo.DeviceListener):
 
 
     def on_accelerometor_data(self, myo, timestamp, acceleration):
-        pass
-
+        self.acc = acceleration
+        if (self.state > -1):
+            if (self.state != 1):
+                print("acceleration")
+                print (acceleration)
+                if (self.state == 2):
+                    self.Adata.append(acceleration)
+        
     def on_gyroscope_data(self, myo, timestamp, gyroscope):
         pass
 
+    def on_unlock(self, myo, timestamp):
+        pass
+
+    def on_lock(self, myo, timestamp):
+        pass
+
+    def on_sync(self, myo, timestamp):
+        pass
+
+    def on_unsync(self, myo, timestamp):
+        pass
+
+    def on_emg(self, myo, timestamp, emg):
+        self.emg = emg
+        if (self.state > -1):
+            if (self.state !=1):
+                print ("emg")
+                print (emg)
+                if (self.state ==2):
+                    self.Edata.append(emg)
+    
 def main():
     hub = myo.Hub()
-
+    hub.set_locking_policy(myo.locking_policy.none)
     hub.run(10000000, Listener())
 
     # Listen to keyboard interrupts and stop the
